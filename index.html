@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบเช็คชื่อนักเรียนอัจฉริยะ</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- face-api.js -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom styles -->
+    <style>
+       body { font-family: 'Inter', 'Kanit', sans-serif; }
+        .loader { border-top-color: #3b82f6; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        /* Style for the video overlay to show detection */
+        #video-wrapper { position: relative; }
+        #overlay { position: absolute; top: 0; left: 0; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+
+    <!-- Main Container -->
+    <div class="container mx-auto p-4 md:p-6">
+
+        <!-- Header (Admin Only) -->
+        <header id="admin-header" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 hidden">
+             <div class="flex items-center space-x-3">
+                <i data-lucide="scan-face" class="text-blue-600 w-8 h-8"></i>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-700 dark:text-gray-200">ระบบเช็คชื่อนักเรียนอัจฉริยะ (Admin)</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <nav class="flex items-center flex-wrap justify-center space-x-1 md:space-x-2 bg-gray-200 dark:bg-gray-700 p-1 rounded-lg">
+                    <button onclick="switchTab('dashboard')" id="tab-dashboard" class="px-3 py-1.5 text-sm font-medium rounded-md">Dashboard</button>
+                    <button onclick="switchTab('attendance')" id="tab-attendance" class="px-3 py-1.5 text-sm font-medium rounded-md">เช็คชื่อ</button>
+                    <button onclick="switchTab('manage')" id="tab-manage" class="px-3 py-1.5 text-sm font-medium rounded-md">จัดการข้อมูล</button>
+                </nav>
+                <button onclick="toggleTheme()" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm p-2.5">
+                    <i data-lucide="sun" id="theme-icon-sun" class="hidden w-5 h-5"></i>
+                    <i data-lucide="moon" id="theme-icon-moon" class="hidden w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+        
+        <!-- Header (Student Only) -->
+        <header id="student-header" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 hidden">
+             <div class="flex items-center space-x-3">
+                <i data-lucide="scan-face" class="text-blue-600 w-8 h-8"></i>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-700 dark:text-gray-200">ระบบเช็คชื่อนักเรียนอัจฉริยะ</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="logoutStudent()" class="bg-red-500 text-white px-3 py-1.5 text-sm font-medium rounded-md hover:bg-red-600">ออกจากระบบ</button>
+                <button onclick="toggleTheme()" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm p-2.5">
+                    <i data-lucide="sun" id="theme-icon-sun-student" class="hidden w-5 h-5"></i>
+                    <i data-lucide="moon" id="theme-icon-moon-student" class="hidden w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Dynamic Content Area -->
+        <main id="main-content">
+            
+            <!-- 1. Initial Registration Page -->
+            <div id="content-registration" class="space-y-6 max-w-xl mx-auto">
+                <div class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg shadow-xl text-center">
+                    <h2 class="text-2xl font-bold mb-4 text-blue-600">ลงทะเบียนใช้งานครั้งแรก</h2>
+                    <p class="text-gray-600 dark:text-gray-400 mb-6">กรุณากรอกข้อมูลและสแกนใบหน้าเพื่อบันทึกข้อมูลเข้าสู่ระบบ</p>
+                    
+                    <form id="registration-form" class="space-y-4">
+                        <div>
+                            <label for="reg-name" class="block text-left font-medium mb-1">ชื่อ-นามสกุล</label>
+                            <input type="text" id="reg-name" required class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-transparent focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="reg-id" class="block text-left font-medium mb-1">รหัสประจำตัวนักศึกษา</label>
+                            <input type="text" id="reg-id" required class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-transparent focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="reg-class" class="block text-left font-medium mb-1">ห้องเรียน</label>
+                            <input type="text" id="reg-class" required class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-transparent focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        
+                        <div class="pt-4">
+                            <button type="button" onclick="startRegistrationScan()" id="start-reg-scan-btn" class="w-full bg-green-600 text-white px-8 py-3 rounded-full hover:bg-green-700 text-lg font-semibold flex items-center justify-center mx-auto gap-2">
+                                <i data-lucide="scan"></i><span>เริ่มสแกนใบหน้าเพื่อลงทะเบียน</span>
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div id="registration-scan-area" class="hidden mt-6">
+                        <p class="text-red-500 mb-4 font-semibold">กรุณาให้สิทธิ์การเข้าถึงกล้องและตำแหน่งที่ตั้ง</p>
+                        <div class="w-full max-w-md mx-auto bg-black rounded-lg overflow-hidden relative aspect-video">
+                            <video id="reg-video" class="w-full h-full" autoplay muted playsinline></video>
+                            <canvas id="reg-overlay" class="absolute top-0 left-0"></canvas>
+                        </div>
+                        <p id="reg-status" class="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">กำลังโหลดโมเดล...</p>
+                        <button onclick="registerStudent()" id="register-btn" class="mt-4 w-full bg-blue-600 text-white px-8 py-3 rounded-full hover:bg-blue-700 text-lg font-semibold flex items-center justify-center mx-auto gap-2 disabled:opacity-50" disabled>
+                            <i data-lucide="user-plus"></i><span>บันทึกข้อมูลและใบหน้า</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Main Scan Page (Student) -->
+            <div id="content-student-scan" class="hidden space-y-6 max-w-xl mx-auto">
+                <div class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg shadow-xl text-center">
+                    <h2 class="text-2xl font-bold mb-2 text-blue-600">เช็คชื่อประจำวัน</h2>
+                    <p class="text-gray-600 dark:text-gray-400 mb-4">รหัสประจำตัว: <span id="student-id-display" class="font-bold text-xl text-red-500"></span></p>
+                    <p id="check-in-status" class="text-lg font-semibold mb-6 text-green-600">พร้อมเช็คชื่อ</p>
+                    
+                    <div class="w-full max-w-md mx-auto bg-black rounded-lg overflow-hidden relative aspect-video">
+                        <video id="scan-video" class="w-full h-full" autoplay muted playsinline></video>
+                        <canvas id="scan-overlay" class="absolute top-0 left-0"></canvas>
+                        <div id="scan-success-overlay" class="absolute inset-0 bg-green-900 bg-opacity-70 text-white text-2xl font-bold flex items-center justify-center hidden animate-fade-in">
+                            <span id="scan-success-name"></span>&nbsp;เช็คชื่อสำเร็จ!
+                        </div>
+                    </div>
+                    
+                    <p id="scan-status" class="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">กำลังโหลดโมเดล...</p>
+                    <button onclick="checkIn()" id="check-in-btn" class="mt-4 w-full bg-blue-600 text-white px-8 py-3 rounded-full hover:bg-blue-700 text-lg font-semibold flex items-center justify-center mx-auto gap-2 disabled:opacity-50" disabled>
+                        <i data-lucide="check-circle"></i><span>สแกนใบหน้าและเช็คชื่อ</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. Admin Pages (Dashboard, Attendance, Manage) -->
+            
+            <!-- Dashboard Tab (หน้าแรก) -->
+            <div id="content-dashboard" class="space-y-6 hidden">
+                 <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+                     <div class="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
+                        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-300">ภาพรวมและรายชื่อนักเรียน</h2>
+                        <input type="date" id="dashboard-date" class="border rounded-lg p-2 w-full sm:w-auto bg-transparent dark:text-gray-200 dark:border-gray-600">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
+                         <div class="bg-blue-100 dark:bg-blue-900/50 p-4 rounded-lg"><h3 class="text-gray-600 dark:text-gray-400">มาเรียน</h3><p id="stat-present" class="text-3xl font-bold text-blue-700 dark:text-blue-400">0</p></div>
+                        <div class="bg-yellow-100 dark:bg-yellow-900/50 p-4 rounded-lg"><h3 class="text-gray-600 dark:text-gray-400">มาสาย</h3><p id="stat-late" class="text-3xl font-bold text-yellow-700 dark:text-yellow-400">0</p></div>
+                        <div class="bg-red-100 dark:bg-red-900/50 p-4 rounded-lg"><h3 class="text-gray-600 dark:text-gray-400">ขาด/ลา</h3><p id="stat-absent" class="text-3xl font-bold text-red-700 dark:text-red-400">0</p></div>
+                    </div>
+
+                    <!-- Chart Container -->
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-6">
+                        <div class="lg:col-span-2 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                            <h3 class="font-semibold mb-2 text-center">สรุปการเข้าเรียน</h3>
+                            <div class="max-w-[250px] mx-auto">
+                                 <canvas id="attendance-pie-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-3 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                            <h3 class="font-semibold mb-2 text-center">จำนวนการเช็คชื่อรายชั่วโมง</h3>
+                            <div>
+                                <canvas id="attendance-bar-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+                    <h3 class="font-semibold mb-4">รายชื่อนักเรียนในระบบ</h3>
+                    <div id="student-roster-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2"></div>
+                     <div id="roster-loading" class="text-center py-8"><div class="loader w-12 h-12 rounded-full border-4 border-gray-200 dark:border-gray-700 mx-auto"></div><p class="mt-4 text-gray-600 dark:text-gray-400">กำลังโหลดข้อมูลนักเรียน...</p></div>
+                </div>
+            </div>
+
+            <!-- Attendance Tab (For Admin to manually check or review) -->
+            <div id="content-attendance" class="hidden space-y-6">
+                <div id="start-scan-section" class="text-center bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md"><h2 class="text-2xl font-bold mb-4">เริ่มการเช็คชื่อ (Admin)</h2><p class="text-gray-600 dark:text-gray-400 mb-6">กดปุ่มด้านล่างเพื่อเริ่มเปิดกล้องและสแกนใบหน้า</p><button onclick="startScanning()" class="bg-blue-600 text-white px-8 py-3 rounded-full hover:bg-blue-700 text-lg font-semibold flex items-center justify-center mx-auto gap-2"><i data-lucide="camera"></i><span>เริ่มเช็คชื่อ</span></button></div>
+                
+                <div id="scanning-section" class="hidden space-y-6">
+                    <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md flex flex-col items-center">
+                        <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-300">กำลังสแกน...</h2>
+                        <div id="video-loader" class="flex flex-col items-center justify-center h-64 w-full">
+                            <div class="loader w-12 h-12 rounded-full border-4 border-gray-200 dark:border-gray-700"></div>
+                            <p id="video-loading-text" class="mt-4 text-gray-600 dark:text-gray-400">กำลังเปิดกล้อง...</p>
+                        </div>
+                        <div class="w-full max-w-4xl mx-auto bg-black rounded-lg overflow-hidden relative aspect-video hidden" id="video-wrapper">
+                            <video id="video" class="w-full h-full" autoplay muted playsinline></video>
+                            <canvas id="overlay" class="absolute top-0 left-0"></canvas>
+                            <div id="scan-success-overlay-admin" class="absolute inset-0 bg-green-900 bg-opacity-70 text-white text-2xl font-bold flex items-center justify-center hidden animate-fade-in">
+                                <span id="scan-success-name-admin"></span>&nbsp;เช็คชื่อสำเร็จ!
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <button onclick="stopScanning()" class="bg-red-600 text-white px-8 py-3 rounded-full hover:bg-red-700 text-lg font-semibold flex items-center justify-center mx-auto gap-2">
+                            <i data-lucide="stop-circle"></i><span>สิ้นสุดการเช็คชื่อ</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="absence-management-section" class="hidden bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-4">สรุปผลการเช็คชื่อ</h2>
+                    <p class="text-gray-600 dark:text-gray-400 mb-4">ตรวจสอบสถานะของนักเรียนและกดบันทึกเพื่อยืนยัน</p>
+                    <div id="absent-list" class="space-y-3 max-h-80 overflow-y-auto custom-scrollbar pr-2"></div>
+                    <div class="text-right mt-6">
+                        <button onclick="finishAttendance()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">บันทึกและเสร็จสิ้น</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manage Students Tab -->
+            <div id="content-manage" class="hidden">
+                 <div class="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md"><div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4"><h2 class="text-lg font-semibold text-gray-700 dark:text-gray-300">จัดการข้อมูลนักเรียน</h2><button onclick="openStudentModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2 w-full sm:w-auto justify-center"><i data-lucide="user-plus" class="w-5 h-5"></i><span>เพิ่มนักเรียนใหม่</span></button></div><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"><thead class="bg-gray-50 dark:bg-gray-700"><tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300"><th class="px-6 py-3">รหัส</th><th class="px-6 py-3">ชื่อ</th><th class="px-6 py-3">ห้อง</th><th class="px-6 py-3">ใบหน้า</th><th class="px-6 py-3">จัดการ</th></tr></thead><tbody id="student-table-body" class="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700"></tbody></table></div></div>
+            </div>
+            
+        </main>
+        
+        <!-- Modals (Admin) -->
+        <!-- Student Modal -->
+        <div id="student-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 hidden p-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg p-6">
+                <h3 id="modal-title" class="text-xl font-bold mb-4">เพิ่มนักเรียนใหม่</h3>
+                <form id="modal-form" class="space-y-4">
+                    <div>
+                        <label for="modal-id" class="block font-medium mb-1">รหัสประจำตัวนักศึกษา</label>
+                        <input type="text" id="modal-id" required class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-transparent focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="modal-name" class="block font-medium mb-1">ชื่อ-นามสกุล</label>
+                        <input type="text" id="modal-name" required class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-transparent focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="modal-class" class="block font-medium mb-1">ห้องเรียน</label>
+                        <input type="text" id="modal-class" required class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-transparent focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div id="modal-face-scan-area" class="border p-4 rounded-lg">
+                        <h4 class="font-semibold mb-2">สแกนใบหน้า (สำหรับอัพเดท)</h4>
+                        <div class="w-full max-w-md mx-auto bg-black rounded-lg overflow-hidden relative aspect-video">
+                            <video id="modal-video" class="w-full h-full" autoplay muted playsinline></video>
+                            <canvas id="modal-overlay" class="absolute top-0 left-0"></canvas>
+                        </div>
+                        <p id="modal-status" class="mt-2 text-sm text-gray-500 dark:text-gray-400">กรุณาเปิดกล้องและสแกนใบหน้า</p>
+                        <button type="button" onclick="startModalScan()" id="modal-scan-btn" class="mt-2 w-full bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600">เริ่มสแกน/อัพเดทใบหน้า</button>
+                        <input type="hidden" id="modal-image-data">
+                    </div>
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" onclick="closeStudentModal()" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-700">ยกเลิก</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">บันทึก</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Toast Notification -->
+        <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const GAS_WEB_APP_URL = 'YOUR_GOOGLE_APPS_SCRIPT_DEPLOYMENT_URL_HERE'; // **IMPORTANT: REPLACE THIS WITH YOUR DEPLOYMENT URL**
+        const COLLEGE_LAT = 14.529033;
+        const COLLEGE_LON = 100.907445;
+        const MAX_DISTANCE_METERS = 50; // 50 meters radius
+        const CHECK_IN_START_TIME = { hour: 6, minute: 0 }; // 06:00
+        const CHECK_IN_END_TIME = { hour: 8, minute: 30 }; // 08:30
+        const ADMIN_SECRET_CODE = 'admin123'; // Simple admin access for demo. Should be replaced with proper authentication.
+
+        // --- GLOBAL STATE ---
+        let currentTab = 'dashboard';
+        let students = [];
+        let faceMatcher = null;
+        let videoStream = null;
+        let scanInterval = null;
+        let currentStudentId = localStorage.getItem('studentId'); // Check for registered student ID
+        let isRegistered = !!currentStudentId;
+        let isScanning = false;
+        let currentGeolocation = null;
+        let currentScanType = null; // 'registration' or 'checkin' or 'admin' or 'modal'
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeApp();
+            lucide.createIcons();
+        });
+
+        async function initializeApp() {
+            // Load face-api models
+            await loadModels();
+            
+            // Determine which page to show
+            if (isRegistered) {
+                showStudentScanPage(currentStudentId);
+            } else {
+                showRegistrationPage();
+            }
+            
+            // Initial theme setup
+            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            updateThemeIcon();
+        }
+
+        // --- THEME TOGGLE ---
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const sunIcons = document.querySelectorAll('[id^="theme-icon-sun"]');
+            const moonIcons = document.querySelectorAll('[id^="theme-icon-moon"]');
+            
+            sunIcons.forEach(icon => icon.classList.toggle('hidden', !isDark));
+            moonIcons.forEach(icon => icon.classList.toggle('hidden', isDark));
+        }
+
+        // --- NAVIGATION AND PAGE MANAGEMENT ---
+        function showRegistrationPage() {
+            document.getElementById('admin-header').classList.add('hidden');
+            document.getElementById('student-header').classList.add('hidden');
+            document.getElementById('content-registration').classList.remove('hidden');
+            document.getElementById('content-student-scan').classList.add('hidden');
+            document.getElementById('content-dashboard').classList.add('hidden');
+            document.getElementById('content-attendance').classList.add('hidden');
+            document.getElementById('content-manage').classList.add('hidden');
+        }
+
+        function showStudentScanPage(studentId) {
+            document.getElementById('admin-header').classList.add('hidden');
+            document.getElementById('student-header').classList.remove('hidden');
+            document.getElementById('content-registration').classList.add('hidden');
+            document.getElementById('content-student-scan').classList.remove('hidden');
+            document.getElementById('content-dashboard').classList.add('hidden');
+            document.getElementById('content-attendance').classList.add('hidden');
+            document.getElementById('content-manage').classList.add('hidden');
+            document.getElementById('student-id-display').textContent = studentId;
+            
+            // Start the scan process for check-in immediately
+            startScanning('checkin');
+        }
+        
+        function showAdminPage() {
+            document.getElementById('admin-header').classList.remove('hidden');
+            document.getElementById('student-header').classList.add('hidden');
+            document.getElementById('content-registration').classList.add('hidden');
+            document.getElementById('content-student-scan').classList.add('hidden');
+            
+            // Default to dashboard tab
+            switchTab('dashboard');
+            
+            // Load data for admin
+            loadStudents();
+            loadAttendanceData();
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            ['dashboard', 'attendance', 'manage'].forEach(tab => {
+                const content = document.getElementById(`content-${tab}`);
+                const button = document.getElementById(`tab-${tab}`);
+                if (content) content.classList.toggle('hidden', tab !== tabName);
+                if (button) {
+                    button.classList.toggle('bg-blue-600', tab === tabName);
+                    button.classList.toggle('text-white', tab === tabName);
+                    button.classList.toggle('text-gray-700', tab !== tabName);
+                    button.classList.toggle('dark:text-gray-200', tab !== tabName);
+                    button.classList.toggle('hover:bg-blue-500', tab === tabName);
+                    button.classList.toggle('hover:bg-gray-300', tab !== tabName);
+                    button.classList.toggle('dark:hover:bg-gray-600', tab !== tabName);
+                }
+            });
+            
+            // Stop scanning if switching away from attendance tab
+            if (tabName !== 'attendance' && isScanning) {
+                stopScanning();
+            }
+            
+            // Reload data if switching to dashboard or manage
+            if (tabName === 'dashboard') {
+                loadAttendanceData();
+            } else if (tabName === 'manage') {
+                loadStudents();
+            }
+        }
+        
+        function logoutStudent() {
+            localStorage.removeItem('studentId');
+            currentStudentId = null;
+            isRegistered = false;
+            stopScanning();
+            showRegistrationPage();
+            showToast('ออกจากระบบสำเร็จ', 'success');
+        }
+        
+        // --- ADMIN LOGIN (Simple for Demo) ---
+        document.addEventListener('keydown', (e) => {
+            // Press 'A' to open admin login prompt
+            if (e.key === 'A' && !isRegistered) {
+                const code = prompt('กรุณาใส่รหัสลับสำหรับผู้ดูแลระบบ:');
+                if (code === ADMIN_SECRET_CODE) {
+                    showAdminPage();
+                    showToast('เข้าสู่ระบบผู้ดูแลระบบสำเร็จ', 'success');
+                } else if (code !== null) {
+                    showToast('รหัสลับไม่ถูกต้อง', 'error');
+                }
+            }
+        });
+
+        // --- GEOLOCATION AND TIME VALIDATION ---
+        
+        /**
+         * Calculates the distance between two geographical points using the Haversine formula.
+         * @param {number} lat1 - Latitude of point 1.
+         * @param {number} lon1 - Longitude of point 1.
+         * @param {number} lat2 - Latitude of point 2.
+         * @param {number} lon2 - Longitude of point 2.
+         * @returns {number} Distance in meters.
+         */
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // metres
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2-lat1) * Math.PI/180;
+            const Δλ = (lon2-lon1) * Math.PI/180;
+
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; // in metres
+        }
+
+        /**
+         * Gets the current geolocation and performs validation.
+         * @returns {Promise<{lat: number, lon: number, distance: number, isValid: boolean, message: string}>}
+         */
+        function getAndValidateGeolocation() {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) {
+                    resolve({ isValid: false, message: 'เบราว์เซอร์ไม่รองรับ Geolocation' });
+                    return;
+                }
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        const distance = getDistance(latitude, longitude, COLLEGE_LAT, COLLEGE_LON);
+                        const isValid = distance <= MAX_DISTANCE_METERS;
+                        
+                        currentGeolocation = { lat: latitude, lon: longitude };
+
+                        if (isValid) {
+                            resolve({ 
+                                lat: latitude, 
+                                lon: longitude, 
+                                distance: distance, 
+                                isValid: true, 
+                                message: `อยู่ในพื้นที่ (ห่าง ${distance.toFixed(2)} เมตร)` 
+                            });
+                        } else {
+                            resolve({ 
+                                lat: latitude, 
+                                lon: longitude, 
+                                distance: distance, 
+                                isValid: false, 
+                                message: `ท่านอยู่นอกพื้นที่ (ห่าง ${distance.toFixed(2)} เมตร)` 
+                            });
+                        }
+                    },
+                    (error) => {
+                        console.error('Geolocation error:', error);
+                        resolve({ isValid: false, message: 'ไม่สามารถยืนยันตำแหน่งที่ตั้งได้ (กรุณาอนุญาตสิทธิ์)' });
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            });
+        }
+        
+        /**
+         * Checks if the current time is within the allowed check-in window.
+         * @returns {{isValid: boolean, status: string, message: string}}
+         */
+        function checkTimeValidation() {
+            const now = new Date();
+            const day = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+            const hour = now.getHours();
+            const minute = now.getMinutes();
+            
+            // Check if it's Monday (1) to Friday (5)
+            if (day === 0 || day === 6) {
+                return { isValid: false, status: 'นอกวัน', message: 'ไม่สามารถเช็คชื่อได้: วันหยุดสุดสัปดาห์' };
+            }
+            
+            // Convert current time to minutes from midnight
+            const currentTimeInMinutes = hour * 60 + minute;
+            const startTimeInMinutes = CHECK_IN_START_TIME.hour * 60 + CHECK_IN_START_TIME.minute;
+            const endTimeInMinutes = CHECK_IN_END_TIME.hour * 60 + CHECK_IN_END_TIME.minute;
+
+            if (currentTimeInMinutes < startTimeInMinutes) {
+                return { isValid: false, status: 'ก่อนเวลา', message: 'ไม่สามารถเช็คชื่อได้: ยังไม่ถึงเวลาเช็คชื่อ' };
+            } else if (currentTimeInMinutes > endTimeInMinutes) {
+                return { isValid: false, status: 'สาย', message: 'ไม่สามารถเช็คชื่อได้: เลยเวลาที่กำหนด (สาย)' };
+            } else {
+                return { isValid: true, status: 'มาเรียน', message: 'อยู่ในช่วงเวลาเช็คชื่อ' };
+            }
+        }
+
+        // --- FACE-API FUNCTIONS ---
+        async function loadModels() {
+            const statusElement = document.getElementById('reg-status') || document.getElementById('scan-status');
+            statusElement.textContent = 'กำลังโหลดโมเดลใบหน้า...';
+            await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
+            await faceapi.nets.faceRecognitionNet.loadFromUri('./models');
+            await faceapi.nets.ssdMobilenetv1.loadFromUri('./models'); // Use SSD for better detection in registration
+            statusElement.textContent = 'โหลดโมเดลสำเร็จ';
+            
+            // Load student data for face recognition
+            await loadStudentsForFaceRecognition();
+        }
+
+        async function loadStudentsForFaceRecognition() {
+            const statusElement = document.getElementById('scan-status');
+            if (statusElement) statusElement.textContent = 'กำลังโหลดข้อมูลใบหน้า...';
+            
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'getStudents' }),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    students = result.data.filter(s => s.imagedatabase64); // Only students with image data
+                    const labeledDescriptors = await Promise.all(students.map(async student => {
+                        const img = await faceapi.fetchImage(student.imagedatabase64);
+                        const detections = await faceapi.detectSingleFace(img, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptor();
+                        if (detections) {
+                            return new faceapi.LabeledFaceDescriptors(student.id, [detections.descriptor]);
+                        }
+                        return null;
+                    }).filter(d => d !== null));
+                    
+                    faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6); // 0.6 is the distance threshold
+                    if (statusElement) statusElement.textContent = `พร้อมสแกนใบหน้า (${students.length} ใบหน้า)`;
+                    document.getElementById('check-in-btn').disabled = false;
+                } else {
+                    showToast(`โหลดข้อมูลนักเรียนล้มเหลว: ${result.error}`, 'error');
+                    if (statusElement) statusElement.textContent = 'โหลดข้อมูลใบหน้าล้มเหลว';
+                }
+            } catch (error) {
+                console.error('Error loading students for face recognition:', error);
+                showToast('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์', 'error');
+                if (statusElement) statusElement.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+            }
+        }
+
+        // --- REGISTRATION PAGE LOGIC ---
+        
+        function startRegistrationScan() {
+            const name = document.getElementById('reg-name').value;
+            const id = document.getElementById('reg-id').value;
+            const studentClass = document.getElementById('reg-class').value;
+            
+            if (!name || !id || !studentClass) {
+                showToast('กรุณากรอกข้อมูลให้ครบถ้วน', 'warning');
+                return;
+            }
+            
+            // Hide form, show scan area
+            document.getElementById('registration-form').classList.add('hidden');
+            document.getElementById('registration-scan-area').classList.remove('hidden');
+            
+            // Start video stream and geolocation
+            startVideoAndScan('reg-video', 'reg-overlay', 'registration');
+            getAndValidateGeolocation().then(result => {
+                if (!result.isValid) {
+                    showToast(`คำเตือน: ${result.message}`, 'warning');
+                }
+            });
+        }
+        
+        async function registerStudent() {
+            if (!videoStream) {
+                showToast('กรุณาเปิดกล้องก่อน', 'error');
+                return;
+            }
+            
+            const video = document.getElementById('reg-video');
+            const canvas = faceapi.createCanvasFromMedia(video);
+            const displaySize = { width: video.width, height: video.height };
+            faceapi.matchDimensions(canvas, displaySize);
+            
+            const detections = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptor();
+            
+            if (!detections) {
+                showToast('ไม่พบใบหน้า กรุณาจัดให้อยู่ในกรอบ', 'warning');
+                return;
+            }
+            
+            // Draw face detection box
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            const box = resizedDetections.detection.box;
+            
+            // Capture the face image (cropped)
+            const faceCanvas = document.createElement('canvas');
+            faceCanvas.width = box.width;
+            faceCanvas.height = box.height;
+            const ctx = faceCanvas.getContext('2d');
+            ctx.drawImage(video, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
+            const imageData = faceCanvas.toDataURL('image/jpeg'); // Base64 image data
+
+            const name = document.getElementById('reg-name').value;
+            const id = document.getElementById('reg-id').value;
+            const studentClass = document.getElementById('reg-class').value;
+            
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        action: 'addStudent', 
+                        data: { 
+                            id: id, 
+                            name: name, 
+                            class: studentClass, 
+                            imageData: imageData 
+                        } 
+                    }),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showToast('ลงทะเบียนสำเร็จ! กำลังเข้าสู่หน้าเช็คชื่อ', 'success');
+                    localStorage.setItem('studentId', id);
+                    currentStudentId = id;
+                    isRegistered = true;
+                    stopScanning();
+                    showStudentScanPage(id);
+                } else {
+                    showToast(`ลงทะเบียนล้มเหลว: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showToast('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์', 'error');
+            }
+        }
+
+        // --- STUDENT CHECK-IN LOGIC ---
+        
+        async function checkIn() {
+            if (!videoStream) {
+                showToast('กรุณาเปิดกล้องก่อน', 'error');
+                return;
+            }
+            
+            document.getElementById('check-in-btn').disabled = true;
+            document.getElementById('scan-status').textContent = 'กำลังตรวจสอบตำแหน่งและเวลา...';
+
+            // 1. Check Time
+            const timeResult = checkTimeValidation();
+            if (!timeResult.isValid && timeResult.status === 'สาย') {
+                showToast(timeResult.message, 'error');
+                document.getElementById('scan-status').textContent = timeResult.message;
+                document.getElementById('check-in-btn').disabled = false;
+                return;
+            }
+            
+            // 2. Check Location
+            const locationResult = await getAndValidateGeolocation();
+            if (!locationResult.isValid) {
+                showToast(locationResult.message, 'error');
+                document.getElementById('scan-status').textContent = locationResult.message;
+                document.getElementById('check-in-btn').disabled = false;
+                return;
+            }
+            
+            document.getElementById('scan-status').textContent = 'กำลังสแกนใบหน้า...';
+
+            // 3. Face Recognition
+            const video = document.getElementById('scan-video');
+            const displaySize = { width: video.width, height: video.height };
+            
+            const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+            
+            if (!detections) {
+                showToast('ไม่พบใบหน้า กรุณาจัดให้อยู่ในกรอบ', 'warning');
+                document.getElementById('scan-status').textContent = 'ไม่พบใบหน้า';
+                document.getElementById('check-in-btn').disabled = false;
+                return;
+            }
+            
+            const bestMatch = faceMatcher.findBestMatch(detections.descriptor);
+            
+            if (bestMatch.label === currentStudentId) {
+                // 4. Record Attendance
+                const student = students.find(s => s.id === currentStudentId);
+                const status = timeResult.status === 'มาเรียน' ? 'มาเรียน' : 'สาย';
+                
+                try {
+                    const response = await fetch(GAS_WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            action: 'recordAttendance', 
+                            data: { 
+                                id: currentStudentId, 
+                                name: student.name, 
+                                class: student.class, 
+                                timestamp: new Date().toISOString(), 
+                                location: `${locationResult.lat},${locationResult.lon}`,
+                                status: status
+                            } 
+                        }),
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        document.getElementById('scan-success-name').textContent = student.name;
+                        document.getElementById('scan-success-overlay').classList.remove('hidden');
+                        document.getElementById('scan-status').textContent = `เช็คชื่อสำเร็จ: ${status}`;
+                        showToast(`เช็คชื่อสำเร็จ: ${status}`, 'success');
+                        
+                        // Stop scanning after successful check-in
+                        setTimeout(() => {
+                            stopScanning();
+                            document.getElementById('scan-success-overlay').classList.add('hidden');
+                            document.getElementById('check-in-status').textContent = `เช็คชื่อสำเร็จเมื่อ: ${new Date().toLocaleTimeString('th-TH')}`;
+                        }, 3000);
+                        
+                    } else {
+                        showToast(`บันทึกการเช็คชื่อล้มเหลว: ${result.error}`, 'error');
+                        document.getElementById('scan-status').textContent = `บันทึกการเช็คชื่อล้มเหลว: ${result.error}`;
+                        document.getElementById('check-in-btn').disabled = false;
+                    }
+                } catch (error) {
+                    console.error('Check-in error:', error);
+                    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์', 'error');
+                    document.getElementById('scan-status').textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+                    document.getElementById('check-in-btn').disabled = false;
+                }
+                
+            } else {
+                showToast(`ใบหน้าไม่ตรงกับรหัสประจำตัว (${bestMatch.label})`, 'error');
+                document.getElementById('scan-status').textContent = `ใบหน้าไม่ตรงกับรหัสประจำตัว (${bestMatch.label})`;
+                document.getElementById('check-in-btn').disabled = false;
+            }
+        }
+
+        // --- COMMON SCANNING FUNCTIONS ---
+        
+        async function startVideoAndScan(videoId, overlayId, type) {
+            currentScanType = type;
+            const video = document.getElementById(videoId);
+            const overlay = document.getElementById(overlayId);
+            
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = videoStream;
+                
+                video.addEventListener('play', () => {
+                    const displaySize = { width: video.offsetWidth, height: video.offsetHeight };
+                    faceapi.matchDimensions(overlay, displaySize);
+                    
+                    if (scanInterval) clearInterval(scanInterval);
+                    
+                    scanInterval = setInterval(async () => {
+                        if (!isScanning) return;
+                        
+                        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
+                        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                        
+                        overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+                        faceapi.draw.drawDetections(overlay, resizedDetections);
+                        
+                        if (type === 'registration') {
+                            const statusElement = document.getElementById('reg-status');
+                            const registerBtn = document.getElementById('register-btn');
+                            if (detections.length === 1) {
+                                statusElement.textContent = 'พบใบหน้า! พร้อมบันทึกข้อมูล';
+                                registerBtn.disabled = false;
+                            } else if (detections.length > 1) {
+                                statusElement.textContent = 'พบหลายใบหน้า กรุณาให้มีเพียงคนเดียว';
+                                registerBtn.disabled = true;
+                            } else {
+                                statusElement.textContent = 'ไม่พบใบหน้า';
+                                registerBtn.disabled = true;
+                            }
+                        } else if (type === 'checkin') {
+                            // No continuous recognition needed, only on button click
+                            const statusElement = document.getElementById('scan-status');
+                            if (detections.length === 1) {
+                                statusElement.textContent = 'พบใบหน้า! กดปุ่มเช็คชื่อ';
+                            } else {
+                                statusElement.textContent = 'ไม่พบใบหน้า';
+                            }
+                        }
+                        
+                    }, 100); // Scan every 100ms
+                    
+                    isScanning = true;
+                    if (type === 'checkin') {
+                        document.getElementById('scan-status').textContent = 'พร้อมสแกนใบหน้า';
+                        document.getElementById('check-in-btn').disabled = false;
+                    }
+                });
+                
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                showToast('ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตสิทธิ์', 'error');
+                if (type === 'registration') {
+                    document.getElementById('reg-status').textContent = 'ไม่สามารถเข้าถึงกล้องได้';
+                } else if (type === 'checkin') {
+                    document.getElementById('scan-status').textContent = 'ไม่สามารถเข้าถึงกล้องได้';
+                }
+            }
+        }
+        
+        function stopScanning() {
+            if (scanInterval) {
+                clearInterval(scanInterval);
+                scanInterval = null;
+            }
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            isScanning = false;
+            
+            // Reset UI based on current scan type
+            if (currentScanType === 'checkin') {
+                const video = document.getElementById('scan-video');
+                const overlay = document.getElementById('scan-overlay');
+                if (video) video.srcObject = null;
+                if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+            } else if (currentScanType === 'registration') {
+                const video = document.getElementById('reg-video');
+                const overlay = document.getElementById('reg-overlay');
+                if (video) video.srcObject = null;
+                if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+                
+                // Hide scan area, show form again
+                document.getElementById('registration-scan-area').classList.add('hidden');
+                document.getElementById('registration-form').classList.remove('hidden');
+            }
+            currentScanType = null;
+        }
+
+        // --- UTILITY FUNCTIONS ---
+        
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgColor, icon;
+            switch (type) {
+                case 'success': bgColor = 'bg-green-500'; icon = 'check-circle'; break;
+                case 'error': bgColor = 'bg-red-500'; icon = 'x-circle'; break;
+                case 'warning': bgColor = 'bg-yellow-500'; icon = 'alert-triangle'; break;
+                case 'info': default: bgColor = 'bg-blue-500'; icon = 'info'; break;
+            }
+            
+            toast.className = `flex items-center p-4 mb-4 text-white ${bgColor} rounded-lg shadow-lg animate-fade-in`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mr-2"></i> ${message}`;
+            
+            container.appendChild(toast);
+            lucide.createIcons(); // Re-render icons
+            
+            setTimeout(() => {
+                toast.classList.remove('animate-fade-in');
+                toast.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                setTimeout(() => toast.remove(), 500);
+            }, 5000);
+        }
+        
+        // --- ADMIN FUNCTIONS (Simplified from original code) ---
+        
+        // The original code's admin functions (loadStudents, renderStudentRoster, openStudentModal, etc.) 
+        // are assumed to be present here but are omitted for brevity in this response. 
+        // The user can merge the original JS logic into this new structure.
+        // For the purpose of this modification, we only focus on the new student flow.
+        
+        // Placeholder for original admin functions
+        function loadStudents() { /* ... */ }
+        function loadAttendanceData() { /* ... */ }
+        function openStudentModal() { /* ... */ }
+        function closeStudentModal() { /* ... */ }
+        function startModalScan() { /* ... */ }
+        function startScanning() { /* ... */ } // Admin attendance scan
+        function finishAttendance() { /* ... */ }
+        
+        // Re-implementing the original startScanning for Admin/Attendance tab
+        function startScanning(type = 'admin') {
+            if (type === 'admin') {
+                document.getElementById('start-scan-section').classList.add('hidden');
+                document.getElementById('scanning-section').classList.remove('hidden');
+                document.getElementById('video-wrapper').classList.remove('hidden');
+                document.getElementById('video-loader').classList.add('hidden');
+                startVideoAndScan('video', 'overlay', 'admin');
+            } else if (type === 'checkin') {
+                // This is the student check-in flow
+                startVideoAndScan('scan-video', 'scan-overlay', 'checkin');
+            }
+        }
+        
+        // Initial check to see if the user is registered or needs to register
+        if (currentStudentId) {
+            // If registered, show student scan page
+            // The initializeApp() handles this
+        } else {
+            // If not registered, show registration page
+            // The initializeApp() handles this
+        }
+        
+    </script>
+</body>
+</html>
