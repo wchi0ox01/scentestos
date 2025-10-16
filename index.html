@@ -1,11 +1,12 @@
+html
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบเช็คชื่อนักเรียนอัจฉริยะ</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- แก้ไข Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -18,7 +19,7 @@
     
     <!-- Custom styles -->
     <style>
-       body { font-family: 'Inter', 'Kanit', sans-serif; }
+        body { font-family: 'Inter', 'Kanit', sans-serif; }
         .loader { border-top-color: #3b82f6; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .custom-scrollbar::-webkit-scrollbar { width: 8px; }
@@ -28,7 +29,6 @@
         .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
         .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        /* Style for the video overlay to show detection */
         #video-wrapper { position: relative; }
         #overlay { position: absolute; top: 0; left: 0; }
     </style>
@@ -933,4 +933,5 @@
     </script>
 </body>
 </html>
+
 
